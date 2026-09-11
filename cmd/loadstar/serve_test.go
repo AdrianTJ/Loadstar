@@ -4,7 +4,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 )
@@ -14,8 +13,8 @@ func TestServeStartup(t *testing.T) {
 	// Bind and dial an explicit IPv4 address so the client and server can't end
 	// up on different address families (localhost may resolve to ::1).
 	const addr = "127.0.0.1:9090"
-	os.Setenv("LOADSTAR_LISTEN_ADDR", addr)
-	os.Setenv("DATABASE_URL", ":memory:") // Use in-memory SQLite for testing
+	t.Setenv("LOADSTAR_LISTEN_ADDR", addr)
+	t.Setenv("DATABASE_URL", ":memory:") // Use in-memory SQLite for testing
 
 	go func() {
 		serveCmd([]string{"-insecure"})

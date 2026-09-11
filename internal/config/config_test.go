@@ -42,8 +42,7 @@ workers: 8
 	}
 
 	// 3. Test Env Override
-	os.Setenv("LOADSTAR_LISTEN_ADDR", ":9999")
-	defer os.Unsetenv("LOADSTAR_LISTEN_ADDR")
+	t.Setenv("LOADSTAR_LISTEN_ADDR", ":9999")
 
 	cfg, err = Load(configPath)
 	if err != nil {
