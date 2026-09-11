@@ -24,7 +24,7 @@ func TestCollect_TransportErrorRedactsAPIKey(t *testing.T) {
 	dead := server.URL
 	server.Close()
 
-	oldEndpoint := psiEndpoint
+	oldEndpoint := currentEndpoint()
 	SetEndpoint(dead)
 	defer SetEndpoint(oldEndpoint)
 
@@ -111,7 +111,7 @@ func TestCollect(t *testing.T) {
 	defer server.Close()
 
 	// Override endpoint
-	oldEndpoint := psiEndpoint
+	oldEndpoint := currentEndpoint()
 	SetEndpoint(server.URL)
 	defer SetEndpoint(oldEndpoint)
 

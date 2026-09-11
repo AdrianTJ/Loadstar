@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 )
 
@@ -43,16 +44,28 @@ type Result struct {
 	LighthouseVer string  `json:"lighthouse_version"`
 }
 
-var psiEndpoint = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
+var (
+	psiEndpoint   = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
+	psiEndpointMu sync.RWMutex
+)
 
-// SetEndpoint overrides the PSI API endpoint (used for testing).
+// SetEndpoint overrides the PSI API endpoint (used for testing). Safe to call
+// concurrently with Collect.
 func SetEndpoint(endpoint string) {
+	psiEndpointMu.Lock()
 	psiEndpoint = endpoint
+	psiEndpointMu.Unlock()
+}
+
+func currentEndpoint() string {
+	psiEndpointMu.RLock()
+	defer psiEndpointMu.RUnlock()
+	return psiEndpoint
 }
 
 // Collect performs a Lighthouse analysis via the PageSpeed Insights API.
 func Collect(ctx context.Context, targetURL string, apiKey string) (*Result, error) {
-	u, err := url.Parse(psiEndpoint)
+	u, err := url.Parse(currentEndpoint())
 	if err != nil {
 		return nil, err
 	}
