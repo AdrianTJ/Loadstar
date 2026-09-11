@@ -425,6 +425,23 @@ Raised the `go` directive to `1.26.5`, the lowest release that clears all five.
 claimed 1.21). Keeping the toolchain current is now enforced rather than
 remembered: `govulncheck` fails the build whenever a reachable advisory appears.
 
+#### Recurrence — September 11, 2026
+The same check caught the same class of drift two months later. The `go`
+directive still named `1.26.5`, and `govulncheck` reported five more reachable
+standard-library advisories, all fixed in `go1.26.6`:
+
+| ID | Package | Fixed in | Why it matters here |
+|---|---|---|---|
+| GO-2026-6218 | `net/url` — quadratic complexity in `resolvePath` | go1.26.6 | `lighthouse.Collect` parses target URLs |
+| GO-2026-6090 | `crypto/tls` — post-handshake message limit | go1.26.6 | Every outbound HTTPS measurement |
+| GO-2026-6089 | `net/http` — `ReadHeaderTimeout` skipped in the unencrypted HTTP/2 check | go1.26.6 | The daemon's own listener (§5) |
+| GO-2026-5972 | `encoding/asn1` — unbounded recursion | go1.26.6 | `validator.NewSafeClient` clones the transport |
+| GO-2026-5026 | `net/http` (idna) — ASCII-only Punycode labels accepted | go1.26.6 | `lighthouse.Collect` and webhook delivery |
+
+`go.mod` now pins `1.26.6`, with `README.md` and `GETTING_STARTED.md` following
+it. The July lesson held: the guard works, and the remedy is a one-line bump as
+often as the standard library needs one.
+
 ---
 
 ## Findings Reviewed and Accepted

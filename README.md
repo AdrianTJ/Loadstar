@@ -25,7 +25,7 @@
 ## 🛠 Installation
 
 ### Prerequisites
-- **Go 1.26.5+** (the version in `go.mod`; earlier 1.26 patches carry known stdlib CVEs — see `docs/security.md`)
+- **Go 1.26.6+** (the version in `go.mod`; earlier 1.26 patches carry known stdlib CVEs — see `docs/security.md`)
 - **Google Chrome** or **Chromium** (for browser-based tiers)
 
 ### Build from Source

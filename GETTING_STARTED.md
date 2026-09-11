@@ -19,7 +19,7 @@ At its core, Loadstar is a **performance measurement engine**. Instead of relyin
 
 Before you start, you'll need three things on your machine:
 
-1.  **Go (1.26.5+):** The programming language used to build this. [Download it here](https://go.dev/dl/).
+1.  **Go (1.26.6+):** The programming language used to build this. [Download it here](https://go.dev/dl/).
 2.  **Chrome or Chromium:** Loadstar needs a real browser to run its tests. If you have Chrome installed, you're good!
 3.  **A Terminal:** You'll be typing commands into your terminal (Command Prompt on Windows, Terminal on macOS/Linux).
 
