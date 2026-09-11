@@ -75,8 +75,14 @@ func Collect(ctx context.Context, url string) (*Result, error) {
 
 	res.DOMContentLoadedMS = timing["domContentLoaded"]
 	res.PageLoadMS = timing["loadEventEnd"]
-	res.Waterfall = waterfall
-	res.ResourceCount = len(waterfall)
+
+	// Snapshot under the lock the listener appends with: chromedp keeps
+	// delivering network events on its own goroutine until the caller cancels
+	// the context, which happens after Collect returns.
+	mu.Lock()
+	res.Waterfall = append([]WaterfallEntry(nil), waterfall...)
+	res.ResourceCount = len(res.Waterfall)
+	mu.Unlock()
 
 	// In case performance API isn't fully ready (loadEventEnd is 0),
 	// we fall back to our own timer as a sanity check.
