@@ -6,35 +6,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/AdrianTJ/loadstar/internal/collector/network"
-	"github.com/AdrianTJ/loadstar/internal/job"
 	"github.com/AdrianTJ/loadstar/internal/store"
 )
 
-func newBudgetTestServer(t *testing.T, name string) (http.Handler, store.Store) {
-	t.Helper()
-	tmpDir, _ := os.MkdirTemp("", name)
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-	s, err := store.NewStore(filepath.Join(tmpDir, "test.db"))
-	if err != nil {
-		t.Fatalf("store: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
-
-	m := job.NewManager(s, 1, 10, "")
-	m.Start()
-	t.Cleanup(func() { m.Stop() })
-
-	return NewServer(m, s, "", true).Routes(), s
-}
-
 func TestCreateJob_InvalidBudgetRejected(t *testing.T) {
-	mux, _ := newBudgetTestServer(t, "api-bad-budget")
+	_, mux, _, _ := newTestServer(t, "api-bad-budget", "", true, nil)
 
 	cases := []string{
 		`{"url":"http://example.com","tiers":["network"],"budget":{"assertions":{"bogus.metric":{"max":1}}}}`,
@@ -54,7 +34,7 @@ func TestCreateJob_InvalidBudgetRejected(t *testing.T) {
 
 func TestCreateJob_WithBudgetAcceptedAndEvaluated(t *testing.T) {
 	t.Setenv("LOADSTAR_ALLOW_PRIVATE_IPS", "true") // target is a loopback httptest server
-	mux, _ := newBudgetTestServer(t, "api-good-budget")
+	_, mux, _, _ := newTestServer(t, "api-good-budget", "", true, nil)
 
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -107,7 +87,7 @@ func TestCreateJob_WithBudgetAcceptedAndEvaluated(t *testing.T) {
 }
 
 func TestCreateJob_NoBudgetOmitsBudgetFields(t *testing.T) {
-	mux, s := newBudgetTestServer(t, "api-no-budget")
+	_, mux, s, _ := newTestServer(t, "api-no-budget", "", true, nil)
 
 	// Seed a completed job directly so GET returns immediately.
 	if err := s.CreateJob(context.Background(), &store.Job{
@@ -134,7 +114,7 @@ func TestCreateJob_NoBudgetOmitsBudgetFields(t *testing.T) {
 // TestHistory_NewShape seeds results and checks the metrics map with
 // percentiles appears in GET /v1/history.
 func TestHistory_NewShape(t *testing.T) {
-	mux, s := newBudgetTestServer(t, "api-history")
+	_, mux, s, _ := newTestServer(t, "api-history", "", true, nil)
 
 	url := "http://example.com/hist"
 	s.CreateJob(context.Background(), &store.Job{

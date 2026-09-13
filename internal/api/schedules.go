@@ -76,8 +76,7 @@ func (s *Server) handleGetSchedule(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "schedule not found", http.StatusNotFound)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(sc)
+	writeJSON(w, http.StatusOK, sc)
 }
 
 // handleUpdateSchedule supports one mutation: {"enabled": bool}. Everything
@@ -109,8 +108,7 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sc.Enabled = *req.Enabled
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(sc)
+	writeJSON(w, http.StatusOK, sc)
 }
 
 func (s *Server) handleDeleteSchedule(w http.ResponseWriter, r *http.Request) {

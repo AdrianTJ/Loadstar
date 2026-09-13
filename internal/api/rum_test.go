@@ -6,36 +6,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/AdrianTJ/loadstar/internal/job"
 	"github.com/AdrianTJ/loadstar/internal/store"
 )
-
-func newRUMTestServer(t *testing.T, name string, origins []string) (*Server, http.Handler, store.Store) {
-	t.Helper()
-	tmpDir, _ := os.MkdirTemp("", name)
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-	s, err := store.NewStore(filepath.Join(tmpDir, "test.db"))
-	if err != nil {
-		t.Fatalf("store: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
-
-	m := job.NewManager(s, 1, 10, "")
-	m.Start()
-	t.Cleanup(func() { m.Stop() })
-
-	srv := NewServer(m, s, "", true)
-	if origins != nil {
-		srv.SetRUMOrigins(origins)
-	}
-	return srv, srv.Routes(), s
-}
 
 func postRUM(mux http.Handler, body string, origin string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest("POST", "/v1/rum", bytes.NewReader([]byte(body)))
@@ -50,7 +26,7 @@ func postRUM(mux http.Handler, body string, origin string) *httptest.ResponseRec
 const goodEvent = `{"url":"https://site.example/page","name":"LCP","value":1234.5}`
 
 func TestRUM_DisabledWithoutOrigins(t *testing.T) {
-	_, mux, _ := newRUMTestServer(t, "rum-disabled", nil)
+	_, mux, _, _ := newTestServer(t, "rum-disabled", "", true, nil)
 	if w := postRUM(mux, goodEvent, ""); w.Code != http.StatusNotFound {
 		t.Errorf("ingest status = %d, want 404 when unconfigured", w.Code)
 	}
@@ -65,7 +41,7 @@ func TestRUM_DisabledWithoutOrigins(t *testing.T) {
 }
 
 func TestRUM_IngestHappyPath(t *testing.T) {
-	_, mux, s := newRUMTestServer(t, "rum-happy", []string{"https://site.example"})
+	_, mux, s, _ := newTestServer(t, "rum-happy", "", true, []string{"https://site.example"})
 
 	w := postRUM(mux, goodEvent, "https://site.example")
 	if w.Code != http.StatusNoContent {
@@ -87,28 +63,28 @@ func TestRUM_IngestHappyPath(t *testing.T) {
 func TestRUM_NoOriginHeaderAccepted(t *testing.T) {
 	// sendBeacon from the same origin (and curl) sends no Origin header; once
 	// the endpoint is enabled those must work.
-	_, mux, _ := newRUMTestServer(t, "rum-noorigin", []string{"https://site.example"})
+	_, mux, _, _ := newTestServer(t, "rum-noorigin", "", true, []string{"https://site.example"})
 	if w := postRUM(mux, goodEvent, ""); w.Code != http.StatusNoContent {
 		t.Errorf("status = %d, want 204 for origin-less beacon", w.Code)
 	}
 }
 
 func TestRUM_DisallowedOrigin(t *testing.T) {
-	_, mux, _ := newRUMTestServer(t, "rum-badorigin", []string{"https://site.example"})
+	_, mux, _, _ := newTestServer(t, "rum-badorigin", "", true, []string{"https://site.example"})
 	if w := postRUM(mux, goodEvent, "https://evil.example"); w.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want 403", w.Code)
 	}
 }
 
 func TestRUM_WildcardOrigin(t *testing.T) {
-	_, mux, _ := newRUMTestServer(t, "rum-wildcard", []string{"*"})
+	_, mux, _, _ := newTestServer(t, "rum-wildcard", "", true, []string{"*"})
 	if w := postRUM(mux, goodEvent, "https://anything.example"); w.Code != http.StatusNoContent {
 		t.Errorf("status = %d, want 204 with wildcard", w.Code)
 	}
 }
 
 func TestRUM_Preflight(t *testing.T) {
-	_, mux, _ := newRUMTestServer(t, "rum-preflight", []string{"https://site.example"})
+	_, mux, _, _ := newTestServer(t, "rum-preflight", "", true, []string{"https://site.example"})
 	req := httptest.NewRequest("OPTIONS", "/v1/rum", nil)
 	req.Header.Set("Origin", "https://site.example")
 	w := httptest.NewRecorder()
@@ -122,7 +98,7 @@ func TestRUM_Preflight(t *testing.T) {
 }
 
 func TestRUM_ValidationRejections(t *testing.T) {
-	_, mux, _ := newRUMTestServer(t, "rum-validation", []string{"*"})
+	_, mux, _, _ := newTestServer(t, "rum-validation", "", true, []string{"*"})
 	cases := []struct {
 		name string
 		body string
@@ -142,7 +118,7 @@ func TestRUM_ValidationRejections(t *testing.T) {
 }
 
 func TestRUM_OversizeBodyRejected(t *testing.T) {
-	_, mux, _ := newRUMTestServer(t, "rum-oversize", []string{"*"})
+	_, mux, _, _ := newTestServer(t, "rum-oversize", "", true, []string{"*"})
 	big := `{"url":"https://a.example/","name":"LCP","value":1,"pad":"` + strings.Repeat("x", maxRUMBody) + `"}`
 	if w := postRUM(mux, big, ""); w.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400 for oversize body", w.Code)
@@ -150,7 +126,7 @@ func TestRUM_OversizeBodyRejected(t *testing.T) {
 }
 
 func TestRUM_RateLimit(t *testing.T) {
-	srv, mux, _ := newRUMTestServer(t, "rum-ratelimit", []string{"*"})
+	srv, mux, _, _ := newTestServer(t, "rum-ratelimit", "", true, []string{"*"})
 	// Drain the bucket instantly instead of sending rumBurst real requests.
 	srv.rumLimiter.mu.Lock()
 	srv.rumLimiter.tokens = 0
@@ -163,18 +139,8 @@ func TestRUM_RateLimit(t *testing.T) {
 }
 
 func TestRUM_SummaryRequiresAuthAndComputesP75(t *testing.T) {
-	tmpDir, _ := os.MkdirTemp("", "rum-summary")
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-	s, _ := store.NewStore(filepath.Join(tmpDir, "test.db"))
-	t.Cleanup(func() { s.Close() })
-	m := job.NewManager(s, 1, 10, "")
-	m.Start()
-	t.Cleanup(func() { m.Stop() })
-
 	// Authenticated server this time (apiKey set, not insecure).
-	srv := NewServer(m, s, "secret", false)
-	srv.SetRUMOrigins([]string{"*"})
-	mux := srv.Routes()
+	_, mux, s, _ := newTestServer(t, "rum-summary", "secret", false, []string{"*"})
 
 	url := "https://site.example/page"
 	for i, v := range []float64{100, 200, 300, 400} {
@@ -217,7 +183,7 @@ func TestRUM_SummaryRequiresAuthAndComputesP75(t *testing.T) {
 }
 
 func TestCreateJob_ProfileValidation(t *testing.T) {
-	_, mux, s := newRUMTestServer(t, "api-profile", nil)
+	_, mux, s, _ := newTestServer(t, "api-profile", "", true, nil)
 
 	// Unknown profile -> 400 listing the valid names.
 	bad := `{"url":"http://example.com","tiers":["network"],"profile":"5g"}`
@@ -248,7 +214,7 @@ func TestCreateJob_ProfileValidation(t *testing.T) {
 }
 
 func TestCreateSchedule_ProfileValidation(t *testing.T) {
-	_, mux, _ := newRUMTestServer(t, "api-sched-profile", nil)
+	_, mux, _, _ := newTestServer(t, "api-sched-profile", "", true, nil)
 
 	bad := `{"url":"http://example.com","tiers":["network"],"interval_seconds":60,"profile":"warp"}`
 	req := httptest.NewRequest("POST", "/v1/schedules", bytes.NewReader([]byte(bad)))
@@ -273,7 +239,7 @@ func TestCreateSchedule_ProfileValidation(t *testing.T) {
 }
 
 func TestRUM_SummaryBadWindow(t *testing.T) {
-	_, mux, _ := newRUMTestServer(t, "rum-window", []string{"*"})
+	_, mux, _, _ := newTestServer(t, "rum-window", "", true, []string{"*"})
 	for _, q := range []string{"window_h=0", "window_h=-5", "window_h=99999", "window_h=abc"} {
 		req := httptest.NewRequest("GET", "/v1/rum/summary?url=https://a.example/&"+q, nil)
 		w := httptest.NewRecorder()
@@ -290,7 +256,7 @@ func TestRUM_SummaryBadWindow(t *testing.T) {
 // so a beacon could carry ~8 KB of url per row into a table whose retention
 // default is "keep forever".
 func TestRUMIngest_URLLengthBounded(t *testing.T) {
-	_, mux, _ := newRUMTestServer(t, "rum-urllen", []string{"*"})
+	_, mux, _, _ := newTestServer(t, "rum-urllen", "", true, []string{"*"})
 
 	post := func(target string) int {
 		body, err := json.Marshal(map[string]interface{}{

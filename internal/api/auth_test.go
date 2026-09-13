@@ -3,25 +3,12 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
-
-	"github.com/AdrianTJ/loadstar/internal/job"
-	"github.com/AdrianTJ/loadstar/internal/store"
 )
 
 func TestAPIServer_FailSecureAuth(t *testing.T) {
-	tmpDir, _ := os.MkdirTemp("", "auth-test")
-	defer os.RemoveAll(tmpDir)
-	s, _ := store.NewStore(filepath.Join(tmpDir, "test.db"))
-	defer s.Close()
-
-	m := job.NewManager(s, 1, 10, "")
-
 	apiKey := "top-secret"
-	srv := NewServer(m, s, apiKey, false)
-	mux := srv.Routes()
+	_, mux, _, _ := newTestServer(t, "auth-test", apiKey, false, nil)
 
 	routes := []struct {
 		method string
@@ -71,16 +58,8 @@ func TestAPIServer_FailSecureAuth(t *testing.T) {
 }
 
 func TestAPIServer_MisconfiguredAuth(t *testing.T) {
-	tmpDir, _ := os.MkdirTemp("", "misconfig-auth")
-	defer os.RemoveAll(tmpDir)
-	s, _ := store.NewStore(filepath.Join(tmpDir, "test.db"))
-	defer s.Close()
-
-	m := job.NewManager(s, 1, 10, "")
-
 	// No key AND no insecure flag
-	srv := NewServer(m, s, "", false)
-	mux := srv.Routes()
+	_, mux, _, _ := newTestServer(t, "misconfig-auth", "", false, nil)
 
 	req := httptest.NewRequest("GET", "/v1/jobs", nil)
 	w := httptest.NewRecorder()
@@ -92,15 +71,8 @@ func TestAPIServer_MisconfiguredAuth(t *testing.T) {
 }
 
 func TestAPIServer_ConstantTimeAuthBoundaries(t *testing.T) {
-	tmpDir, _ := os.MkdirTemp("", "ct-auth-bounds")
-	defer os.RemoveAll(tmpDir)
-	s, _ := store.NewStore(filepath.Join(tmpDir, "test.db"))
-	defer s.Close()
-
-	m := job.NewManager(s, 1, 10, "")
 	apiKey := "my-secret-key"
-	srv := NewServer(m, s, apiKey, false)
-	mux := srv.Routes()
+	_, mux, _, _ := newTestServer(t, "ct-auth-bounds", apiKey, false, nil)
 
 	// 1. Test empty key header (X-API-Key is "")
 	req := httptest.NewRequest("GET", "/v1/jobs", nil)

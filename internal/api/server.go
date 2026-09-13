@@ -89,10 +89,19 @@ func (spec *testSpec) validate() error {
 	return nil
 }
 
+// writeJSON sets the JSON content type and encodes v with the given status.
+// It mirrors what every handler used to do inline (header, optional status,
+// encode, ignoring the encode error) in one call.
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
+
 // decodeAndValidate reads a size-capped JSON body into dst and runs the shared
 // validation. It writes the 400 response itself and reports whether the handler
 // should continue.
-func decodeAndValidate(w http.ResponseWriter, r *http.Request, dst interface{}, spec *testSpec) bool {
+func decodeAndValidate(w http.ResponseWriter, r *http.Request, dst any, spec *testSpec) bool {
 	// Cap the request body so a large payload cannot exhaust memory.
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
@@ -318,9 +327,7 @@ func (s *Server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, http.StatusAccepted, map[string]string{
 		"job_id": created.ID,
 		"status": string(created.Status),
 	})
@@ -348,8 +355,7 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 		slog.Error("Failed to fetch job results", "job_id", id, "error", err)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	resp := map[string]interface{}{
+	resp := map[string]any{
 		"job_id":       job.ID,
 		"status":       job.Status,
 		"url":          job.URL,
@@ -364,7 +370,7 @@ func (s *Server) handleGetJob(w http.ResponseWriter, r *http.Request) {
 	if job.BudgetResult != nil {
 		resp["budget_result"] = job.BudgetResult
 	}
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
@@ -374,8 +380,7 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(jobs)
+	writeJSON(w, http.StatusOK, jobs)
 }
 
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
@@ -391,8 +396,7 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(history)
+	writeJSON(w, http.StatusOK, history)
 }
 
 func (s *Server) handleDeleteJob(w http.ResponseWriter, r *http.Request) {

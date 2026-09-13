@@ -214,8 +214,7 @@ func (s *Server) handleRUMSummary(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"url":          target,
 		"window_hours": windowH,
 		"metrics":      metrics,

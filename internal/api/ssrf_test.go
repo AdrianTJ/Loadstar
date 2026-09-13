@@ -5,27 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
-
-	"github.com/AdrianTJ/loadstar/internal/job"
-	"github.com/AdrianTJ/loadstar/internal/store"
 )
 
 func TestSSRFPrevention(t *testing.T) {
-	tmpDir, _ := os.MkdirTemp("", "ssrf-test")
-	defer os.RemoveAll(tmpDir)
-	dbPath := filepath.Join(tmpDir, "test.db")
-	s, _ := store.NewStore(dbPath)
-	defer s.Close()
-
-	m := job.NewManager(s, 1, 10, "")
-	m.Start()
-	defer m.Stop()
-
-	srv := NewServer(m, s, "", true)
-	mux := srv.Routes()
+	_, mux, _, _ := newTestServer(t, "ssrf-test", "", true, nil)
 
 	tests := []struct {
 		url          string
