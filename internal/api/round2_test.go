@@ -16,9 +16,13 @@ import (
 	"github.com/AdrianTJ/loadstar/internal/store"
 )
 
-func newTestServer(t *testing.T) (*Server, store.Store) {
+// newTestServer builds a server for handler tests: a temp store, a started
+// manager, and the given auth settings. RUM origins pass through to
+// SetRUMOrigins (nil keeps the ingest endpoint disabled). Returns the server,
+// its route handler, the store, and the manager.
+func newTestServer(t *testing.T, name, apiKey string, insecure bool, origins []string) (*Server, http.Handler, store.Store, *job.Manager) {
 	t.Helper()
-	tmpDir, _ := os.MkdirTemp("", "api-round2")
+	tmpDir, _ := os.MkdirTemp("", name)
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
 	s, err := store.NewStore(filepath.Join(tmpDir, "test.db"))
 	if err != nil {
@@ -28,7 +32,12 @@ func newTestServer(t *testing.T) (*Server, store.Store) {
 	m := job.NewManager(s, 1, 10, "")
 	m.Start()
 	t.Cleanup(m.Stop)
-	return NewServer(m, s, "", true), s
+
+	srv := NewServer(m, s, apiKey, insecure)
+	if origins != nil {
+		srv.SetRUMOrigins(origins)
+	}
+	return srv, srv.Routes(), s, m
 }
 
 func postJob(t *testing.T, mux http.Handler, body string) *httptest.ResponseRecorder {
@@ -40,7 +49,7 @@ func postJob(t *testing.T, mux http.Handler, body string) *httptest.ResponseReco
 }
 
 func TestCreateJob_InvalidTier(t *testing.T) {
-	srv, _ := newTestServer(t)
+	srv, _, _, _ := newTestServer(t, "api-round2", "", true, nil)
 	mux := srv.Routes()
 
 	if w := postJob(t, mux, `{"url":"http://example.com","tiers":["bogus"]}`); w.Code != http.StatusBadRequest {
@@ -55,7 +64,7 @@ func TestCreateJob_InvalidTier(t *testing.T) {
 }
 
 func TestDeleteJob_RunningReturns409(t *testing.T) {
-	srv, s := newTestServer(t)
+	srv, _, s, _ := newTestServer(t, "api-round2", "", true, nil)
 	mux := srv.Routes()
 
 	// Seed a RUNNING job directly.
@@ -78,7 +87,7 @@ func TestDeleteJob_RunningReturns409(t *testing.T) {
 }
 
 func TestCreateJob_TimeoutBounds(t *testing.T) {
-	srv, s := newTestServer(t)
+	srv, _, s, _ := newTestServer(t, "api-round2", "", true, nil)
 	mux := srv.Routes()
 
 	if w := postJob(t, mux, `{"url":"http://example.com","tiers":["network"],"timeout_s":700}`); w.Code != http.StatusBadRequest {
@@ -97,7 +106,7 @@ func TestCreateJob_TimeoutBounds(t *testing.T) {
 }
 
 func TestCreateJob_BodyTooLarge(t *testing.T) {
-	srv, _ := newTestServer(t)
+	srv, _, _, _ := newTestServer(t, "api-round2", "", true, nil)
 	mux := srv.Routes()
 
 	big := `{"url":"http://example.com","webhook_url":"` + strings.Repeat("a", 2<<20) + `"}`

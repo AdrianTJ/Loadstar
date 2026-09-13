@@ -5,31 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/AdrianTJ/loadstar/internal/job"
 	"github.com/AdrianTJ/loadstar/internal/store"
 )
-
-func newScheduleTestServer(t *testing.T, name, apiKey string, insecure bool) http.Handler {
-	t.Helper()
-	tmpDir, _ := os.MkdirTemp("", name)
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-	s, err := store.NewStore(filepath.Join(tmpDir, "test.db"))
-	if err != nil {
-		t.Fatalf("store: %v", err)
-	}
-	t.Cleanup(func() { s.Close() })
-
-	m := job.NewManager(s, 1, 10, "")
-	m.Start()
-	t.Cleanup(func() { m.Stop() })
-
-	return NewServer(m, s, apiKey, insecure).Routes()
-}
 
 func doJSON(t *testing.T, mux http.Handler, method, path, body string, headers map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
@@ -49,7 +29,7 @@ func doJSON(t *testing.T, mux http.Handler, method, path, body string, headers m
 }
 
 func TestScheduleLifecycle(t *testing.T) {
-	mux := newScheduleTestServer(t, "api-sched-crud", "", true)
+	_, mux, _, _ := newTestServer(t, "api-sched-crud", "", true, nil)
 
 	// Create.
 	w := doJSON(t, mux, "POST", "/v1/schedules",
@@ -102,7 +82,7 @@ func TestScheduleLifecycle(t *testing.T) {
 }
 
 func TestCreateSchedule_Validation(t *testing.T) {
-	mux := newScheduleTestServer(t, "api-sched-valid", "", true)
+	_, mux, _, _ := newTestServer(t, "api-sched-valid", "", true, nil)
 
 	cases := []struct {
 		name string
@@ -137,7 +117,7 @@ func TestCreateSchedule_Validation(t *testing.T) {
 }
 
 func TestSchedulesRequireAuth(t *testing.T) {
-	mux := newScheduleTestServer(t, "api-sched-auth", "sekrit", false)
+	_, mux, _, _ := newTestServer(t, "api-sched-auth", "sekrit", false, nil)
 
 	paths := []struct{ method, path string }{
 		{"POST", "/v1/schedules"},
@@ -156,7 +136,7 @@ func TestSchedulesRequireAuth(t *testing.T) {
 }
 
 func TestMetricsEndpoint(t *testing.T) {
-	mux := newScheduleTestServer(t, "api-metrics", "sekrit", false)
+	_, mux, _, _ := newTestServer(t, "api-metrics", "sekrit", false, nil)
 
 	w := doJSON(t, mux, "GET", "/metrics", "", map[string]string{"X-API-Key": "sekrit"})
 	if w.Code != http.StatusOK {
@@ -182,7 +162,7 @@ func TestMetricsEndpoint(t *testing.T) {
 // missing the other would have left the hole open on the other endpoint. This
 // test fails if the two ever drift apart again.
 func TestSharedSpecValidation_JobsAndSchedulesAgree(t *testing.T) {
-	mux := newScheduleTestServer(t, "shared-spec", "", true)
+	_, mux, _, _ := newTestServer(t, "shared-spec", "", true, nil)
 
 	// Each case supplies only the shared fields; the endpoint-specific ones
 	// (timeout_s, interval_seconds) are added per request below and are valid
@@ -228,7 +208,7 @@ func TestSharedSpecValidation_JobsAndSchedulesAgree(t *testing.T) {
 
 // The shared validation must not swallow the endpoint-specific rules.
 func TestEndpointSpecificValidationStillApplies(t *testing.T) {
-	mux := newScheduleTestServer(t, "spec-specific", "", true)
+	_, mux, _, _ := newTestServer(t, "spec-specific", "", true, nil)
 	const okURL = `"url":"http://93.184.216.34/"`
 
 	if w := doJSON(t, mux, http.MethodPost, "/v1/jobs", "{"+okURL+`,"timeout_s":9999}`, nil); w.Code != http.StatusBadRequest {

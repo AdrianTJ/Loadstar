@@ -8,31 +8,17 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/AdrianTJ/loadstar/internal/job"
 	"github.com/AdrianTJ/loadstar/internal/store"
 )
 
 func TestAPIServer(t *testing.T) {
-	// Setup
-	tmpDir, _ := os.MkdirTemp("", "api-server-test")
-	defer os.RemoveAll(tmpDir)
-	dbPath := filepath.Join(tmpDir, "test.db")
-	s, _ := store.NewStore(dbPath)
-	defer s.Close()
-
-	m := job.NewManager(s, 1, 10, "")
-	m.Start()
-	defer m.Stop()
-
-	srv := NewServer(m, s, "", true) // Use insecure mode for base tests
-	mux := srv.Routes()
+	// Setup — insecure mode for the base tests.
+	_, mux, s, m := newTestServer(t, "api-server-test", "", true, nil)
 
 	// 1. Test POST /v1/jobs
 	reqBody := map[string]interface{}{
@@ -153,17 +139,7 @@ func TestAPIServer(t *testing.T) {
 }
 
 func TestAPIServer_WebhookSSRF(t *testing.T) {
-	tmpDir, _ := os.MkdirTemp("", "webhook-ssrf-test")
-	defer os.RemoveAll(tmpDir)
-	s, _ := store.NewStore(filepath.Join(tmpDir, "test.db"))
-	defer s.Close()
-
-	m := job.NewManager(s, 1, 10, "")
-	m.Start()
-	defer m.Stop()
-
-	srv := NewServer(m, s, "", true)
-	mux := srv.Routes()
+	_, mux, _, _ := newTestServer(t, "webhook-ssrf-test", "", true, nil)
 
 	tests := []struct {
 		webhookURL string
@@ -197,17 +173,7 @@ func TestAPIServer_WebhookSSRF(t *testing.T) {
 }
 
 func TestAPIServer_RunsConstraint(t *testing.T) {
-	tmpDir, _ := os.MkdirTemp("", "runs-constraint-test")
-	defer os.RemoveAll(tmpDir)
-	s, _ := store.NewStore(filepath.Join(tmpDir, "test.db"))
-	defer s.Close()
-
-	m := job.NewManager(s, 1, 10, "")
-	m.Start()
-	defer m.Stop()
-
-	srv := NewServer(m, s, "", true)
-	mux := srv.Routes()
+	_, mux, _, _ := newTestServer(t, "runs-constraint-test", "", true, nil)
 
 	tests := []struct {
 		runs     int
